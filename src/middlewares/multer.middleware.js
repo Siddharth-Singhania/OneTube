@@ -1,4 +1,4 @@
-import multer from "munlter"
+import multer from "multer"
 
 
 const storage = multer.diskStorage({
