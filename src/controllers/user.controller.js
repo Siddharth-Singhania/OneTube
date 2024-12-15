@@ -3,6 +3,8 @@ import {ApiError} from "../utils/ApiErrors.js"
 import { User } from "../models/user.model.js"
 import { uploadOnCloudinary } from "../utils/cloudinary.js"
 import { ApiResponse } from "../utils/ApiResponse.js"
+import jwt  from "jsonwebtoken"
+
 
 const generateAccessAndRefreshTokens = async(userId) =>{
     try {
@@ -16,7 +18,7 @@ const generateAccessAndRefreshTokens = async(userId) =>{
         return {accessToken,refreshToken}
 
     } catch (error) {
-        throw new ApiError(500,"Something went wrong while generating refresh and access token")
+        throw new ApiError(500,error || "Something went wrong while generating refresh and access token")
     }
 }
 
@@ -46,14 +48,14 @@ const registerUser = asyncHandler(async (req,res)=>{
     }
 
     const avatarLocalPath = req.files?.avatar[0]?.path;
-    //const coverImageLocalPath = req.files?.coverImage[0]?.path
+    const coverImageLocalPath = req.files?.coverImage[0]?.path
 
-    let coverImageLocalpath;
+    //let coverImageLocalpath;
     //classic method as well as to make sure there is no error if there is no coverImage.
     //if we use same method as avatarLocalPath then there will be error of undefined in case of no coverImage
-    if(req.files && Array.isArray(req.files.coverImage) && req.files.coverImage.length > 0){
-        coverImageLocalpath = req.files.coverImage[0].path;
-    }
+    //if(req.files && Array.isArray(req.files.coverImage) && req.files.coverImage.length > 0){
+    //    coverImageLocalpath = req.files.coverImage[0].path;
+    //}
 
     if(!avatarLocalPath){
         throw new ApiError(400,"Avatar file is required!!")
@@ -119,7 +121,7 @@ const loginUser = asyncHandler(async (req,res) =>{
 
     const {accessToken,refreshToken} = await generateAccessAndRefreshTokens(user._id);
     
-    const loggedInUser = await user.select(
+    const loggedInUser = await User.findById(user._id).select(
         "-password -refreshToken"
     )
     const options = {
@@ -161,5 +163,49 @@ const logoutuser = asyncHandler(async(req,res) =>{
 })
 
 
+const refreshAccessToken = asyncHandler(async(req,res)=>{
+    const incomingRefreshToken = req.cookies.refreshToken || req.body.refreshToken;
 
-export {registerUser, loginUser,logoutuser}
+    if(!incomingRefreshToken){
+        throw new ApiError(401,"Error: Unauthorized Request!")
+    }
+
+    try {
+        const token = jwt.verify(incomingRefreshToken,process.env.REFRESH_TOKEN_SECRET)
+        const user = await User.findById(token._id).select(
+            "-password"
+        )
+        if(!user){
+            throw new ApiError(401,"Invalid Refresh Token");
+        }
+    
+        if(incomingRefreshToken !== user?.refreshToken){
+            throw new ApiError(401,"Refresh Token is expired or Used")
+        }
+    
+        const options={
+            httpOnly:true,
+            secure:true
+        }
+        
+        const {newAccessToken,newRefreshToken} = await generateAccessAndRefreshTokens(user._id);
+        
+    
+        return res.status(200)
+        .cookie("accessToken",newAccessToken,options)
+        .cookie("refreshToken",newRefreshToken,options)
+        .json(
+            200,
+            {accessToken: newAccessToken,
+             refreshToken: newRefreshToken},
+            "Refreshed Access Token"
+        )
+    } catch (error) {
+        throw new ApiError(401,error || "Invalid Refresh Token!!!!")
+    }
+
+})
+
+
+
+export {registerUser, loginUser,logoutuser,refreshAccessToken}
