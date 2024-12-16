@@ -22,8 +22,6 @@ const generateAccessAndRefreshTokens = async(userId) =>{
     }
 }
 
-
-
 const registerUser = asyncHandler(async (req,res)=>{
     //get user details from frontend
     //validation - not empty
@@ -65,7 +63,7 @@ const registerUser = asyncHandler(async (req,res)=>{
     const coverImage = await uploadOnCloudinary(coverImageLocalPath);
 
     if(!avatar){
-        throw new ApiError(400,"Avatar file is required!!!!!")
+        throw new ApiError(500,"Error While Updating Avatar!!!!!")
     }
 
     const user = await User.create({
@@ -162,7 +160,6 @@ const logoutuser = asyncHandler(async(req,res) =>{
 
 })
 
-
 const refreshAccessToken = asyncHandler(async(req,res)=>{
     const incomingRefreshToken = req.cookies.refreshToken || req.body.refreshToken;
 
@@ -194,11 +191,11 @@ const refreshAccessToken = asyncHandler(async(req,res)=>{
         return res.status(200)
         .cookie("accessToken",newAccessToken,options)
         .cookie("refreshToken",newRefreshToken,options)
-        .json(
+        .json( new ApiResponse(
             200,
             {accessToken: newAccessToken,
              refreshToken: newRefreshToken},
-            "Refreshed Access Token"
+            "Refreshed Access Token")
         )
     } catch (error) {
         throw new ApiError(401,error || "Invalid Refresh Token!!!!")
@@ -206,6 +203,88 @@ const refreshAccessToken = asyncHandler(async(req,res)=>{
 
 })
 
+const changeCurrentPassword = asyncHandler(async(req,res)=>{
+    const {oldPassword,newPassword} = req.body
 
+    const user = await User.findById(req.user?._id)
 
-export {registerUser, loginUser,logoutuser,refreshAccessToken}
+    const isPasswordCorrect = await user.isPasswordCorrect(oldPassword);
+
+    if(!isPasswordCorrect){
+        throw new ApiError(400,"Old Password did not Match");
+    }
+
+    user.password = newPassword;
+    await user.save({validateBeforeSave:false})
+    
+    return res.status(200)
+    .json(
+        new ApiResponse(200,{},"Password changed successfully")
+    )
+})
+
+const getCurrentUser = asyncHandler(async(req,res)=>{
+    return res.status(200)
+    .json(new ApiResponse(200,req.user,"Current user fetched successfully"))
+})
+
+const updateAccountDetails = asyncHandler(async(req,res)=>{
+    const {fullName,email} = req.body
+    if(!fullName || !email){
+        throw new ApiError(400,"All fields are required")
+    }
+    const user = await User.findByIdAndUpdate(req.user?._id,{
+        $set:{
+            fullName: fullName,
+            email:email
+        }
+    },{new:true}).select("-password")
+    
+    return res.status(200)
+    .json(new ApiResponse(200,user,"Account details updated successfully"))
+
+})
+
+const updateUserAvatar = asyncHandler(async(req,res)=>{
+    const avatarLocalPath = req.file?.path
+    if(!avatarLocalPath){
+        throw new ApiError(400,"Avatar file is Required")
+    }
+    const avatar = await uploadOnCloudinary(avatarLocalPath)
+    if(!avatar){
+        throw new ApiError(500,"Error While Updating Avatar!")
+    }
+    const user = await User.findByIdAndUpdate(req.user?._id,
+        {
+            $set:{avatar: avatar.url}
+        },{new:true} 
+    ).select("-password")    //By default, findOneAndUpdate() returns the document as it was before update was applied. If you set new: true, findOneAndUpdate() will instead give you the object after update was applied
+
+    return res.status(200)
+    .json(
+        new ApiResponse(200,user,"Avatar updated Successfully!")
+    )
+})
+
+const updateCoverImage = asyncHandler(async(req,res)=>{
+    const CoverImageLocalPath = req.file?.path
+    if(!CoverImageLocalPath){
+        throw new ApiError(400,"Cover Image file is Required")
+    }
+    const CoverImage = await uploadOnCloudinary(CoverImageLocalPath)
+    if(!CoverImage){
+        throw new ApiError(500,"Error While Updating CoverImage!")
+    }
+    const user = await User.findByIdAndUpdate(req.user?._id,
+        {
+            $set:{CoverImage: CoverImage.url}
+        },{new:true} 
+    ).select("-password")    //By default, findOneAndUpdate() returns the document as it was before update was applied. If you set new: true, findOneAndUpdate() will instead give you the object after update was applied
+
+    return res.status(200)
+    .json(
+        new ApiResponse(200,user,"CoverImage updated Successfully!")
+    )
+})
+
+export {registerUser, loginUser,logoutuser,refreshAccessToken,changeCurrentPassword,getCurrentUser,updateAccountDetails,updateUserAvatar,updateCoverImage}
