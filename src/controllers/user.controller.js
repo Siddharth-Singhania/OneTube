@@ -147,7 +147,7 @@ const logoutuser = asyncHandler(async(req,res) =>{
     await User.findByIdAndUpdate(
         req.user._id,
         {
-            $set:{refreshToken: undefined}
+            $unset:{refreshToken: 1}
         }
     )
     const options = {
@@ -355,7 +355,6 @@ const getUserChannelProfile = asyncHandler(async(req,res) =>{
         new ApiResponse(200,channel[0],"User channel fetched successfully")
     )
 })
-
 
 const getWatchHitory = asyncHandler(async(req,res)=>{
     const user = await User.aggregate([
