@@ -116,6 +116,11 @@ const getLikedVideos = asyncHandler(async (req, res) => {
                 result:{$first: "$result"}
             }
         },{
+            $match: {
+                result: { $ne: null }  // Ensure that list is not null
+            }
+        },
+        {
             $replaceRoot:{newRoot:"$result"}
         }
     ])  
